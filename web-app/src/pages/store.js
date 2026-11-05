@@ -4,22 +4,50 @@ import { rewardsCatalog } from '../data/rewardsCatalog';
 
 export default function StorePage() {
   const [filter, setFilter] = useState('ALL');
-  const [points, setPoints] = useState(750);
-  const [selectedReward, setSelectedReward] = useState(null);
+  const [points, setPoints] = useState(1500);
   const [msg, setMsg] = useState('');
+  const [vouchers, setVouchers] = useState([]);
+
+  useEffect(() => {
+    const saved = localStorage.getItem('user_vouchers');
+    if (saved) setVouchers(JSON.parse(saved));
+  }, []);
 
   const filteredItems = filter === 'ALL'
     ? rewardsCatalog
     : rewardsCatalog.filter(item => item.type === filter || item.category === filter);
 
-  const handleRedeem = (item) => {
+  const handleRedeem = async (item) => {
     if (points < item.cost) {
       setMsg(`Points సరిపోవు! You need ${item.cost - points} more points.`);
       return;
     }
-    setPoints(prev => prev - item.cost);
-    setMsg(`🎉 Successful! ${item.title} redeemed successfully.`);
-    setSelectedReward(null);
+
+    try {
+      const res = await fetch('/api/redeem-voucher', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userId: 'usr_local_test',
+          productId: item.id,
+          brand: item.brand,
+          cost: item.cost,
+          title: item.title
+        })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setPoints(prev => prev - item.cost);
+        const updatedVouchers = [data, ...vouchers];
+        setVouchers(updatedVouchers);
+        localStorage.setItem('user_vouchers', JSON.stringify(updatedVouchers));
+        setMsg(`🎉 Successful! ${item.title} redeemed. Code: ${data.voucherCode}`);
+      } else {
+        setMsg(`Redemption failed: ${data.error}`);
+      }
+    } catch {
+      setMsg('Redemption network error.');
+    }
   };
 
   return (
@@ -29,11 +57,10 @@ export default function StorePage() {
       </Head>
 
       <div className="max-w-3xl mx-auto">
-        {/* Header & Balance */}
         <div className="flex justify-between items-center mb-6 border-b border-slate-800 pb-4">
           <div>
             <h1 className="text-2xl font-bold bg-gradient-to-r from-amber-400 to-orange-500 bg-clip-text text-transparent">
-              Rewards Hub
+              Rewards Store
             </h1>
             <p className="text-xs text-slate-400">Swiggy, Zomato, Jio & Airtel Vouchers</p>
           </div>
@@ -49,7 +76,6 @@ export default function StorePage() {
           </div>
         )}
 
-        {/* Filter Buttons */}
         <div className="flex gap-2 overflow-x-auto pb-3 mb-6 no-scrollbar">
           {['ALL', 'swiggy', 'zomato', 'jio', 'airtel'].map((tab) => (
             <button
@@ -66,7 +92,6 @@ export default function StorePage() {
           ))}
         </div>
 
-        {/* Catalog Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {filteredItems.map((item) => (
             <div

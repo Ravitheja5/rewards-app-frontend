@@ -1,42 +1,31 @@
-import { adminDb } from "@/lib/admin";
-import admin from "firebase-admin";
-
 export default async function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).end();
-  const { userId, brand, costPoints } = req.body;
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const { userId, productId, brand, cost, title } = req.body;
+
+  if (!userId || !productId || !cost) {
+    return res.status(400).json({ error: 'Missing required redemption parameters.' });
+  }
 
   try {
-    const userRef = adminDb.collection("users").doc(userId);
-    const result = await adminDb.runTransaction(async (t) => {
-      const userDoc = await t.get(userRef);
-      if (!userDoc.exists) throw new Error("User record not found");
+    const redemptionId = `RDM_${Date.now()}_${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
 
-      const userData = userDoc.data();
-      if ((userData.points || 0) < costPoints) throw new Error("Insufficient balance");
+    // Dummy voucher generation for client demonstration
+    const voucherCode = `${brand.toUpperCase().slice(0, 3)}-${Math.random().toString(36).substring(2, 10).toUpperCase()}`;
 
-      const voucherQuery = await adminDb.collection("vouchers_pool")
-        .where("brand", "==", brand)
-        .where("is_used", "==", false)
-        .limit(1)
-        .get();
-
-      if (voucherQuery.empty) throw new Error("OUT_OF_STOCK");
-
-      const voucherDoc = voucherQuery.docs[0];
-      const voucherData = voucherDoc.data();
-
-      t.update(userRef, { points: userData.points - costPoints });
-      t.update(voucherDoc.ref, {
-        is_used: true,
-        assigned_to: userId,
-        redeemed_at: new Date().toISOString(),
-      });
-
-      return voucherData;
+    return res.status(200).json({
+      success: true,
+      redemptionId,
+      voucherCode,
+      brand,
+      title,
+      cost,
+      status: 'FULFILLED',
+      message: `${title} successfully redeemed!`
     });
-
-    return res.status(200).json({ success: true, voucher: result });
   } catch (err) {
-    return res.status(400).json({ error: err.message });
+    return res.status(500).json({ error: err.message || 'Redemption failed' });
   }
 }
